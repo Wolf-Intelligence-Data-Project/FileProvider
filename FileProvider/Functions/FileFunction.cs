@@ -1,96 +1,65 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
 using FileProvider.Interfaces;
 using FileProvider.Models;
-using FileProvider.Repositories;
-using FileProvider.Services;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.RabbitMQ;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
-namespace OrderReportFunction;
+namespace FileProvider.Functions;
 
 public class FileFunction
 {
-    private readonly IProductRepository _productRepository;
+    private readonly ILogger<FileFunction> _logger;
     private readonly IFileService _fileService;
-    private readonly IStorageService _storageService;
     private readonly IEmailService _emailService;
+    private readonly IStorageService _storageService; // Use IStorageService
+    private readonly IConfiguration _config;
 
-    public FileFunction(IProductRepository productRepository, IFileService fileService, IStorageService storageService, IEmailService emailService)
+    public FileFunction(
+        ILogger<FileFunction> logger,
+        IFileService fileService,
+        IEmailService emailService,
+        IStorageService storageService, // Inject IStorageService
+        IConfiguration config)
     {
-        _productRepository = productRepository;
+        _logger = logger;
         _fileService = fileService;
-        _storageService = storageService;
         _emailService = emailService;
+        _storageService = storageService; // Initialize storage service
+        _config = config;
     }
 
-    [FunctionName("GenerateOrderReport")]
-    public async Task Run(
-        [RabbitMQTrigger("order_reports", ConnectionStringSetting = "RabbitMQConnection")] string message,
-        [RabbitMQ(ConnectionStringSetting = "RabbitMQConnection")] ICollector<string> rabbitQueue,
-        ILogger log)
+    [Function("OrderReportFunction")]
+    public async Task Run([Microsoft.Azure.Functions.Worker.RabbitMQTrigger("order-report-queue", ConnectionStringSetting = "RabbitMQConnectionString")] string message)
     {
-        log.LogInformation($"Received RabbitMQ message: {message}");
-
         try
         {
-            // Parse the incoming message
-            var request = JsonSerializer.Deserialize<FileRequest>(message);
-            if (request == null || string.IsNullOrEmpty(request.RecipientEmail))
+            var fileRequest = JsonSerializer.Deserialize<FileRequest>(message);
+            if (fileRequest == null)
             {
-                log.LogError("Invalid message received.");
+                _logger.LogError("Invalid message received from RabbitMQ.");
                 return;
             }
 
-            // 1. Get all sold products
-            var products = await _productRepository.GetSoldProductsAsync();
-            var productList = new List<ProductEntity>(products);
+            _logger.LogInformation($"Processing order report for: {fileRequest.Email}");
 
-            if (productList.Count == 0)
-            {
-                log.LogWarning("No sold products found.");
-                return;
-            }
+            // Fetch sold products from the database
+            var products = _fileService.GetSoldProducts(fileRequest.CustomerId, fileRequest.SoldUntil);
 
-            // 2. Generate Excel file
-            byte[] excelFile = _fileService.GenerateExcel(productList);
+            // Generate Excel file
+            byte[] excelData = _fileService.GenerateExcel(products);
 
-            // 3. Upload file to Azure Blob Storage
-            string fileName = $"OrderReport_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
-            string fileUrl = await _storageService.UploadFileAsync(excelFile, fileName);
+            // Upload to Blob Storage using IStorageService
+            string fileUrl = await _storageService.GetFileUrlAsync($"order-report-{fileRequest.CustomerId}.xlsx");
 
-            log.LogInformation($"File uploaded: {fileUrl}");
+            // Send email with download link
+            await _emailService.SendEmailAsync(fileRequest.Email, fileUrl);
 
-            // 4. Send email with file link
-            await _emailService.SendEmailAsync(request.RecipientEmail, fileUrl);
-
-            log.LogInformation("Email sent successfully.");
-
-            // 5. Send confirmation back to OrderProvider via RabbitMQ
-            var response = new FileGenerationResponse
-            {
-                Success = true,
-                Message = "Order report generated and emailed successfully.",
-                FileUrl = fileUrl
-            };
-
-            rabbitQueue.Add(JsonSerializer.Serialize(response));
-            log.LogInformation("Response sent to OrderProvider.");
+            _logger.LogInformation($"Report successfully sent to {fileRequest.Email}");
         }
         catch (Exception ex)
         {
-            log.LogError($"Error processing order report: {ex.Message}");
-            var errorResponse = new FileGenerationResponse
-            {
-                Success = false,
-                Message = $"Failed to generate order report: {ex.Message}"
-            };
-            rabbitQueue.Add(JsonSerializer.Serialize(errorResponse));
+            _logger.LogError($"Error processing order report: {ex.Message}");
         }
     }
 }

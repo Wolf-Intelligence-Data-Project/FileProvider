@@ -1,8 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using FileProvider.Models;
 
-
-
 namespace FileProvider.Data;
 
 public class ProductDbContext : DbContext
