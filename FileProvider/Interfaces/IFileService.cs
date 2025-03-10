@@ -1,6 +1,8 @@
-﻿namespace FileProvider.Interfaces
+﻿using FileProvider.Models;
+
+namespace FileProvider.Interfaces;
+
+public interface IFileService
 {
-    public interface IFileService
-    {
-    }
+    byte[] GenerateExcel(List<ProductEntity> products);
 }

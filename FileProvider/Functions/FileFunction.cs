@@ -40,7 +40,7 @@ public class FileFunction
         try
         {
             // Parse the incoming message
-            var request = JsonSerializer.Deserialize<OrderReportRequest>(message);
+            var request = JsonSerializer.Deserialize<FileRequest>(message);
             if (request == null || string.IsNullOrEmpty(request.RecipientEmail))
             {
                 log.LogError("Invalid message received.");
@@ -72,7 +72,7 @@ public class FileFunction
             log.LogInformation("Email sent successfully.");
 
             // 5. Send confirmation back to OrderProvider via RabbitMQ
-            var response = new OrderReportResponse
+            var response = new FileGenerationResponse
             {
                 Success = true,
                 Message = "Order report generated and emailed successfully.",
@@ -85,7 +85,7 @@ public class FileFunction
         catch (Exception ex)
         {
             log.LogError($"Error processing order report: {ex.Message}");
-            var errorResponse = new OrderReportResponse
+            var errorResponse = new FileGenerationResponse
             {
                 Success = false,
                 Message = $"Failed to generate order report: {ex.Message}"

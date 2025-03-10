@@ -1,6 +1,9 @@
-﻿namespace FileProvider.Interfaces
+﻿using FileProvider.Models;
+
+namespace FileProvider.Interfaces
 {
-    internal interface IProductRepository
+    public interface IProductRepository
     {
+        Task<IEnumerable<ProductEntity>> GetSoldProductsAsync();
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using ClosedXML.Excel;
 using FileProvider.Interfaces;
@@ -13,20 +14,33 @@ namespace FileProvider.Services
             using var workbook = new XLWorkbook();
             var worksheet = workbook.Worksheets.Add("Sold Products");
 
-            worksheet.Cell(1, 1).Value = "ID";
-            worksheet.Cell(1, 2).Value = "Name";
-            worksheet.Cell(1, 3).Value = "Sold Until";
-            worksheet.Cell(1, 4).Value = "Customer ID";
-            worksheet.Cell(1, 5).Value = "Price";
+            // Define headers (Removed Product ID, Sold Until, Customer ID, Reserved Until)
+            worksheet.Cell(1, 1).Value = "Company Name";
+            worksheet.Cell(1, 2).Value = "Organization Number";
+            worksheet.Cell(1, 3).Value = "Address";
+            worksheet.Cell(1, 4).Value = "Postal Code";
+            worksheet.Cell(1, 5).Value = "City";
+            worksheet.Cell(1, 6).Value = "Phone Number";
+            worksheet.Cell(1, 7).Value = "Email";
+            worksheet.Cell(1, 8).Value = "Business Type";
+            worksheet.Cell(1, 9).Value = "Revenue";
+            worksheet.Cell(1, 10).Value = "Number of Employees";
+            worksheet.Cell(1, 11).Value = "CEO";
 
             int row = 2;
             foreach (var product in products)
             {
-                worksheet.Cell(row, 1).Value = product.Id;
-                worksheet.Cell(row, 2).Value = product.Name;
-                worksheet.Cell(row, 3).Value = product.SoldUntil.ToString();
-                worksheet.Cell(row, 4).Value = product.CustomerId;
-                worksheet.Cell(row, 5).Value = product.Price;
+                worksheet.Cell(row, 1).Value = product.CompanyName;
+                worksheet.Cell(row, 2).Value = product.OrganizationNumber;
+                worksheet.Cell(row, 3).Value = product.Address;
+                worksheet.Cell(row, 4).Value = product.PostalCode;
+                worksheet.Cell(row, 5).Value = product.City;
+                worksheet.Cell(row, 6).Value = product.PhoneNumber;
+                worksheet.Cell(row, 7).Value = product.Email;
+                worksheet.Cell(row, 8).Value = product.BusinessType;
+                worksheet.Cell(row, 9).Value = product.Revenue;
+                worksheet.Cell(row, 10).Value = product.NumberOfEmployees;
+                worksheet.Cell(row, 11).Value = product.CEO;
                 row++;
             }
 

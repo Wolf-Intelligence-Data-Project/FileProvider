@@ -1,6 +1,7 @@
-﻿namespace FileProvider.Interfaces
+﻿namespace FileProvider.Interfaces;
+
+public interface IEmailService
 {
-    public interface IEmailService
-    {
-    }
+    Task SendEmailAsync(string recipientEmail, string fileUrl);
+
 }
