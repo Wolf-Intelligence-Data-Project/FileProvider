@@ -5,6 +5,8 @@ namespace FileProvider.Models;
 class FileRequest
 {
     [Required]
+    public string OrderId { get; set; }
+    [Required]
     public Guid CustomerId { get; set; }
     [Required]
     public DateTime SoldUntil { get; set; }

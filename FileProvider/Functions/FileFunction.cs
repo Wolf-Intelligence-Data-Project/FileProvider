@@ -1,9 +1,8 @@
+using System.Text.Json;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Logging;
 using FileProvider.Interfaces;
 using FileProvider.Models;
-using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace FileProvider.Functions;
 
@@ -12,54 +11,53 @@ public class FileFunction
     private readonly ILogger<FileFunction> _logger;
     private readonly IFileService _fileService;
     private readonly IEmailService _emailService;
-    private readonly IStorageService _storageService; // Use IStorageService
-    private readonly IConfiguration _config;
+    private readonly IStorageService _storageService;
 
     public FileFunction(
         ILogger<FileFunction> logger,
         IFileService fileService,
         IEmailService emailService,
-        IStorageService storageService, // Inject IStorageService
-        IConfiguration config)
+        IStorageService storageService)
     {
         _logger = logger;
         _fileService = fileService;
         _emailService = emailService;
-        _storageService = storageService; // Initialize storage service
-        _config = config;
+        _storageService = storageService;
     }
 
-    [Function("OrderReportFunction")]
-    public async Task Run([Microsoft.Azure.Functions.Worker.RabbitMQTrigger("order-report-queue", ConnectionStringSetting = "RabbitMQConnectionString")] string message)
+    [FunctionName("OrderReportFunction")]
+    public async Task Run(
+        [RabbitMQTrigger("order-report-queue", ConnectionStringSetting = "RabbitMQConnectionString")] string message,
+        ILogger log)
     {
         try
         {
             var fileRequest = JsonSerializer.Deserialize<FileRequest>(message);
             if (fileRequest == null)
             {
-                _logger.LogError("Invalid message received from RabbitMQ.");
+                log.LogError("Invalid message received from RabbitMQ.");
                 return;
             }
 
-            _logger.LogInformation($"Processing order report for: {fileRequest.Email}");
+            log.LogInformation($"Processing order report for: {fileRequest.Email}");
 
-            // Fetch sold products from the database
+            // Fetch sold products
             var products = _fileService.GetSoldProducts(fileRequest.CustomerId, fileRequest.SoldUntil);
 
             // Generate Excel file
             byte[] excelData = _fileService.GenerateExcel(products);
 
-            // Upload to Blob Storage using IStorageService
+            // Upload to Blob Storage
             string fileUrl = await _storageService.GetFileUrlAsync($"order-report-{fileRequest.CustomerId}.xlsx");
 
             // Send email with download link
             await _emailService.SendEmailAsync(fileRequest.Email, fileUrl);
 
-            _logger.LogInformation($"Report successfully sent to {fileRequest.Email}");
+            log.LogInformation($"Report successfully sent to {fileRequest.Email}");
         }
         catch (Exception ex)
         {
-            _logger.LogError($"Error processing order report: {ex.Message}");
+            log.LogError($"Error processing order report: {ex.Message}");
         }
     }
 }

@@ -1,16 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 
-namespace FileProvider.Models
+namespace FileProvider.Models;
+
+public class FileGenerationResponse
 {
-    class FileGenerationResponse
-    {
-        string FileUrl { get; set; }
-        string Message { get; set; }
+    [Required]
+    public string OrderId { get; set; }
 
-        bool IsSuccess { get; set; }
-    }
+    [Required]
+    public string CustomerId { get; set; }
+
+    public string Message { get; set; }
+
+    [Required]
+    public bool IsSuccess { get; set; } = false;
 }
