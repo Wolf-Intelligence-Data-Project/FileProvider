@@ -5,5 +5,7 @@ namespace FileProvider.Interfaces;
 public interface IFileService
 {
     byte[] GenerateExcel(List<ProductEntity> products);
-    List<ProductEntity> GetSoldProducts(Guid customerId, DateTime soldUntil);
+    Task<List<ProductEntity>> GetSoldProductsAsync(Guid customerId);
+
+    Task<string> GenerateAndUploadExcelAsync(Guid customerId);
 }

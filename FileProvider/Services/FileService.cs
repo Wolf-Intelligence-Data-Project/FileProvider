@@ -2,33 +2,39 @@
 using FileProvider.Data;
 using FileProvider.Interfaces;
 using FileProvider.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace FileProvider.Services;
 
 public class FileService : IFileService
 {
     private readonly ProductDbContext _productDbContext;
+    private readonly IStorageService _storageService;
 
-    public FileService(ProductDbContext productDbContext)
+    public FileService(ProductDbContext productDbContext, IStorageService storageService)
     {
         _productDbContext = productDbContext;
+        _storageService = storageService;
     }
 
-    // Correct implementation of GetSoldProducts fetching data from the database
-    public List<ProductEntity> GetSoldProducts(Guid customerId, DateTime soldUntil)
+    public async Task<List<ProductEntity>> GetSoldProductsAsync(Guid customerId)
     {
-        // Query the database to get products that match the customerId and soldUntil date
-        return _productDbContext.Products
-            .Where(p => p.CustomerId == customerId && p.SoldUntil <= soldUntil)
-            .ToList();
+        var latestSoldUntil = await _productDbContext.Products
+            .Where(p => p.CustomerId == customerId && p.SoldUntil != null)
+            .MaxAsync(p => p.SoldUntil);
+
+        return await _productDbContext.Products
+            .Where(p => p.CustomerId == customerId && p.SoldUntil == latestSoldUntil)
+            .ToListAsync();
     }
 
+
+    // NEEDS AUTO CLEANUP BLOB WHEN IT IS PUBLISHED 
     public byte[] GenerateExcel(List<ProductEntity> products)
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Sold Products");
 
-        // Define headers (Removed Product ID, Sold Until, Customer ID, Reserved Until)
         worksheet.Cell(1, 1).Value = "Company Name";
         worksheet.Cell(1, 2).Value = "Organization Number";
         worksheet.Cell(1, 3).Value = "Address";
@@ -60,6 +66,47 @@ public class FileService : IFileService
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
+
+
         return stream.ToArray();
+
+
+    }
+
+    public async Task<string> GenerateAndUploadExcelAsync(Guid customerId)
+    {
+        var soldProducts = await _productDbContext.Products
+            .Where(p => p.CustomerId == customerId && p.SoldUntil != null)
+            .OrderByDescending(p => p.SoldUntil)
+            .ToListAsync();
+
+        if (!soldProducts.Any())
+            throw new Exception("No sold products found for the given customer.");
+
+        Console.WriteLine($"--- SoldUntil values for customer {customerId} ---");
+        foreach (var product in soldProducts)
+        {
+            Console.WriteLine($"ProductId: {product.ProductId}, SoldUntil: {product.SoldUntil:O}");
+        }
+
+        var latestSoldUntil = soldProducts.First().SoldUntil!.Value;
+
+        var products = soldProducts
+            .Where(p => p.SoldUntil!.Value == latestSoldUntil)
+            .ToList();
+
+        if (!products.Any())
+            throw new Exception("No matching sold products found for the given customer.");
+
+        byte[] excelFile = GenerateExcel(products);
+
+        string folderPath = @"C:\filetest";
+        if (!Directory.Exists(folderPath))
+            Directory.CreateDirectory(folderPath);
+
+        string filePath = Path.Combine(folderPath, $"SoldProducts_{customerId}_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx");
+        await File.WriteAllBytesAsync(filePath, excelFile);
+
+        return filePath;
     }
 }

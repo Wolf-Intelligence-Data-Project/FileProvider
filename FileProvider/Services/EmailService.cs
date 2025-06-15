@@ -36,7 +36,14 @@ public class EmailService : IEmailService
         try
         {
             var response = await _httpClient.PostAsync("https://api.brevo.com/v3/smtp/email", jsonContent);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Failed to send email. Status: {response.StatusCode}. Content: {responseContent}");
+                throw new Exception("Brevo failed");
+            }
             response.EnsureSuccessStatusCode();
+
         }
         catch (Exception ex)
         {

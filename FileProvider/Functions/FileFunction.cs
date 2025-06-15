@@ -1,8 +1,9 @@
-using System.Text.Json;
-using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using FileProvider.Interfaces;
 using FileProvider.Models;
+using Microsoft.Azure.Functions.Worker;
+using Newtonsoft.Json;
+using Microsoft.Azure.Functions.Worker.Http;
 
 namespace FileProvider.Functions;
 
@@ -25,39 +26,35 @@ public class FileFunction
         _storageService = storageService;
     }
 
-    [FunctionName("OrderReportFunction")]
+    [Function("OrderReportFunction")]
     public async Task Run(
-        [RabbitMQTrigger("order-report-queue", ConnectionStringSetting = "RabbitMQConnectionString")] string message,
-        ILogger log)
+     [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "order-report")] HttpRequestData req,
+     FunctionContext executionContext)
     {
+        var logger = executionContext.GetLogger("OrderReportFunction");
         try
         {
-            var fileRequest = JsonSerializer.Deserialize<FileRequest>(message);
+            var message = await req.ReadAsStringAsync();
+
+            var fileRequest = JsonConvert.DeserializeObject<FileRequest>(message);
             if (fileRequest == null)
             {
-                log.LogError("Invalid message received from RabbitMQ.");
+                logger.LogError("Invalid message received.");
                 return;
             }
 
-            log.LogInformation($"Processing order report for: {fileRequest.Email}");
+            logger.LogInformation($"Processing order report for: {fileRequest.CustomerEmail}");
 
-            // Fetch sold products
-            var products = _fileService.GetSoldProducts(fileRequest.CustomerId, fileRequest.SoldUntil);
-
-            // Generate Excel file
-            byte[] excelData = _fileService.GenerateExcel(products);
-
-            // Upload to Blob Storage
-            string fileUrl = await _storageService.GetFileUrlAsync($"order-report-{fileRequest.CustomerId}.xlsx");
+            string fileUrl = await _fileService.GenerateAndUploadExcelAsync(fileRequest.CustomerId);
 
             // Send email with download link
-            await _emailService.SendEmailAsync(fileRequest.Email, fileUrl);
+            await _emailService.SendEmailAsync(fileRequest.CustomerEmail, fileUrl);
 
-            log.LogInformation($"Report successfully sent to {fileRequest.Email}");
+            logger.LogInformation($"Report successfully sent to {fileRequest.CustomerEmail}");
         }
         catch (Exception ex)
         {
-            log.LogError($"Error processing order report: {ex.Message}");
+            logger.LogError($"Error processing order report: {ex.Message}");
         }
     }
 }

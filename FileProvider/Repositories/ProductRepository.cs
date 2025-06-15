@@ -14,12 +14,38 @@ class ProductRepository : IProductRepository
         _connectionString = config["ProductsDatabase"];
     }
 
-    public async Task<IEnumerable<ProductEntity>> GetSoldProductsAsync()
+    public async Task<IEnumerable<ProductEntity>> GetSoldProductsAsync(Guid customerId)
     {
         using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        string query = "SELECT * FROM Products WHERE SoldUntil IS NOT NULL AND CustomerId IS NOT NULL";
-        return await connection.QueryAsync<ProductEntity>(query);
+        string query = @"
+        SELECT 
+            [p].[Address], 
+            [p].[BusinessType], 
+            [p].[CEO], 
+            [p].[City], 
+            [p].[CompanyName],
+            [p].[Email], 
+            [p].[OrganizationNumber], 
+            [p].[NumberOfEmployees], 
+            [p].[PhoneNumber], 
+            [p].[PostalCode],
+            [p].[Revenue]
+        FROM 
+            [Products] AS [p]
+        WHERE 
+            [p].[CustomerId] = @CustomerId 
+            AND [p].[SoldUntil] = (
+                SELECT MAX([SoldUntil]) 
+                FROM [Products] 
+                WHERE [CustomerId] = @CustomerId
+            )";
+
+        return await connection.QueryAsync<ProductEntity>(
+            query,
+            new { CustomerId = customerId }
+        );
     }
+
 }
